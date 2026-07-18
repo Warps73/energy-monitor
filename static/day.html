@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Détail jour — Énergie</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+<style>
+  :root {
+    --bg: #0f1117; --card: #1a1d27; --border: #2a2d3a;
+    --text: #e2e8f0; --muted: #8892a4;
+    --hp: #f97316; --hc: #22d3ee; --green: #4ade80; --yellow: #fbbf24;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: system-ui, sans-serif; min-height: 100vh; }
+  header { padding: 1rem 1.5rem; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 1rem; }
+  header h1 { font-size: 1.1rem; font-weight: 600; }
+  .back { color: var(--muted); text-decoration: none; font-size: .9rem; display: flex; align-items: center; gap: .4rem; }
+  .back:hover { color: var(--text); }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 1rem; padding: 1.5rem; }
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 1.25rem; }
+  .card-label { font-size: .75rem; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; margin-bottom: .4rem; }
+  .card-value { font-size: 2rem; font-weight: 700; line-height: 1; }
+  .card-sub { font-size: .8rem; color: var(--muted); margin-top: .3rem; }
+  .card.hc .card-value { color: var(--hc); }
+  .card.hp .card-value { color: var(--hp); }
+  .card.total .card-value { color: var(--green); }
+  .section { padding: 0 1.5rem 1.5rem; }
+  .section h2 { font-size: .9rem; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; margin-bottom: 1rem; }
+  .chart-wrap { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 1.25rem; }
+  .chart-wrap canvas { display: block; width: 100% !important; }
+  .no-data { color: var(--muted); font-size: .85rem; padding: 1rem 0; text-align: center; }
+  .abo-note { font-size: .75rem; color: var(--muted); margin-top: .25rem; }
+</style>
+</head>
+<body>
+
+<header>
+  <a class="back" href="/">← Retour</a>
+  <h1 id="pageTitle">–</h1>
+</header>
+
+<div class="grid">
+  <div class="card hc">
+    <div class="card-label">Heures Creuses</div>
+    <div class="card-value" id="costHC">–</div>
+    <div class="card-sub" id="kwhHC">–</div>
+  </div>
+  <div class="card hp">
+    <div class="card-label">Heures Pleines</div>
+    <div class="card-value" id="costHP">–</div>
+    <div class="card-sub" id="kwhHP">–</div>
+  </div>
+  <div class="card total">
+    <div class="card-label">Total journée</div>
+    <div class="card-value" id="totalCost">–</div>
+    <div class="card-sub" id="totalKwh">–</div>
+    <div class="abo-note" id="aboNote">–</div>
+  </div>
+</div>
+
+<div class="section">
+  <h2>Consommation par heure (kWh)</h2>
+  <div class="chart-wrap">
+    <canvas id="chartHourly" height="140"></canvas>
+  </div>
+</div>
+
+<div class="section">
+  <h2>Puissance moyenne par heure (W)</h2>
+  <div class="chart-wrap">
+    <canvas id="chartPower" height="120"></canvas>
+  </div>
+</div>
+
+<script>
+const date = location.pathname.split('/').pop()
+const fmt = (n, d=1) => n == null ? '–' : (+n).toFixed(d)
+const fmtEur = n => n == null ? '–' : (+n).toFixed(2) + ' €'
+
+document.getElementById('pageTitle').textContent = new Date(date + 'T12:00:00').toLocaleDateString('fr-FR', {
+  weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'
+})
+
+const chartDefaults = {
+  responsive: true, maintainAspectRatio: false,
+  plugins: { legend: { display: false }, tooltip: { mode: 'index', intersect: false } },
+  scales: {
+    x: { ticks: { color: '#8892a4', font:{size:11} }, grid: { color: '#2a2d3a' } },
+    y: { ticks: { color: '#8892a4', font:{size:11} }, grid: { color: '#2a2d3a' } }
+  }
+}
+
+const hourlyChart = new Chart(document.getElementById('chartHourly'), {
+  type: 'bar',
+  data: { labels: [], datasets: [
+    { label: 'HC (kWh)', data: [], backgroundColor: 'rgba(34,211,238,.75)' },
+    { label: 'HP (kWh)', data: [], backgroundColor: 'rgba(249,115,22,.75)' }
+  ]},
+  options: { ...chartDefaults,
+    plugins: { legend: { display: true, labels: { color: '#8892a4', font:{size:11} } } },
+    scales: { ...chartDefaults.scales, y: { ...chartDefaults.scales.y, title: { display: true, text: 'kWh', color:'#8892a4' } } }
+  }
+})
+
+const powerChart = new Chart(document.getElementById('chartPower'), {
+  type: 'line',
+  data: { labels: [], datasets: [{
+    label: 'W', data: [], borderColor: '#6366f1', backgroundColor: 'rgba(99,102,241,.1)',
+    fill: true, tension: 0.3, pointRadius: 0, borderWidth: 2
+  }]},
+  options: { ...chartDefaults, scales: { ...chartDefaults.scales, y: { ...chartDefaults.scales.y, title: { display: true, text: 'Watts', color:'#8892a4' } } } }
+})
+
+async function load() {
+  const res = await fetch(`/api/day/${date}`)
+  const { summary, hourly } = await res.json()
+
+  document.getElementById('costHC').textContent = fmtEur(summary.cost_hc)
+  document.getElementById('kwhHC').textContent = fmt(summary.kwh_hc, 3) + ' kWh'
+  document.getElementById('costHP').textContent = fmtEur(summary.cost_hp)
+  document.getElementById('kwhHP').textContent = fmt(summary.kwh_hp, 3) + ' kWh'
+  document.getElementById('totalCost').textContent = fmtEur(summary.total_avec_abo)
+  document.getElementById('totalKwh').textContent = fmt((summary.kwh_hc + summary.kwh_hp), 2) + ' kWh'
+  document.getElementById('aboNote').textContent = `dont ${fmtEur(summary.abonnement)} abonnement`
+
+  const labels = hourly.map(h => `${String(h.hour).padStart(2,'0')}h`)
+  hourlyChart.data.labels = labels
+  hourlyChart.data.datasets[0].data = hourly.map(h => h.is_hc ? h.kwh : null)
+  hourlyChart.data.datasets[1].data = hourly.map(h => !h.is_hc ? h.kwh : null)
+  hourlyChart.update()
+
+  powerChart.data.labels = labels
+  powerChart.data.datasets[0].data = hourly.map(h => h.avg_w)
+  powerChart.update()
+}
+
+load()
+</script>
+</body>
+</html>

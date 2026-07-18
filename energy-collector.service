@@ -1,0 +1,7 @@
+[Unit]
+Description=Energy Collector (one-shot)
+
+[Service]
+User=openclaw
+WorkingDirectory=/home/openclaw/projects/energy-monitor
+ExecStart=/home/openclaw/projects/energy-monitor/venv/bin/python3 /home/openclaw/projects/energy-monitor/collector.py

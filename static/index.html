@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Énergie Maison</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+<style>
+  :root {
+    --bg: #0f1117;
+    --card: #1a1d27;
+    --border: #2a2d3a;
+    --text: #e2e8f0;
+    --muted: #8892a4;
+    --hp: #f97316;
+    --hc: #22d3ee;
+    --green: #4ade80;
+    --red: #f87171;
+    --yellow: #fbbf24;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: system-ui, sans-serif; min-height: 100vh; }
+  header { padding: 1rem 1.5rem; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 1rem; }
+  header h1 { font-size: 1.1rem; font-weight: 600; }
+  .live-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green); animation: pulse 2s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 1rem; padding: 1.5rem; }
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 1.25rem; }
+  .card-label { font-size: .75rem; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; margin-bottom: .4rem; }
+  .card-value { font-size: 2rem; font-weight: 700; line-height: 1; }
+  .card-sub { font-size: .8rem; color: var(--muted); margin-top: .3rem; }
+  .badge { display: inline-block; padding: .2rem .6rem; border-radius: 6px; font-size: .75rem; font-weight: 600; }
+  .badge-hc { background: rgba(34,211,238,.15); color: var(--hc); }
+  .badge-hp { background: rgba(249,115,22,.15); color: var(--hp); }
+  .section { padding: 0 1.5rem 1.5rem; }
+  .section h2 { font-size: .9rem; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; margin-bottom: 1rem; }
+  .chart-wrap { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 1.25rem; }
+  .cost-row { display: flex; gap: 1rem; margin-bottom: 1rem; }
+  .cost-col { flex: 1; background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 1rem; }
+  .cost-col .label { font-size: .75rem; color: var(--muted); margin-bottom: .25rem; }
+  .cost-col .val { font-size: 1.5rem; font-weight: 700; }
+  .cost-col.hc .val { color: var(--hc); }
+  .cost-col.hp .val { color: var(--hp); }
+  .alerts-list { display: flex; flex-direction: column; gap: .5rem; }
+  .alert-item { background: var(--card); border: 1px solid var(--border); border-left: 3px solid var(--red); border-radius: 8px; padding: .75rem 1rem; display: flex; align-items: center; justify-content: space-between; font-size: .85rem; }
+  .alert-item.acked { opacity: .4; border-left-color: var(--border); }
+  .alert-time { color: var(--muted); font-size: .75rem; }
+  .ack-btn { background: none; border: 1px solid var(--border); color: var(--muted); border-radius: 6px; padding: .2rem .6rem; cursor: pointer; font-size: .75rem; }
+  .ack-btn:hover { border-color: var(--text); color: var(--text); }
+  .no-data { color: var(--muted); font-size: .85rem; padding: .5rem 0; }
+  @media(max-width:600px) { .cost-row { flex-direction: column; } }
+  .day-list { display: flex; flex-direction: column; gap: .4rem; margin-top: 1rem; }
+  .day-row { display: flex; align-items: center; justify-content: space-between; background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: .6rem 1rem; text-decoration: none; color: var(--text); transition: border-color .15s; }
+  .day-row:hover { border-color: #6366f1; }
+  .day-row .day-date { font-size: .9rem; font-weight: 500; }
+  .day-row .day-meta { font-size: .8rem; color: var(--muted); }
+  .day-row .day-cost { font-size: 1rem; font-weight: 700; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="live-dot" id="liveDot"></div>
+  <h1>Énergie Maison</h1>
+  <span id="tariffBadge" class="badge">–</span>
+  <span style="margin-left:auto;font-size:.8rem;color:var(--muted)" id="lastUpdate">–</span>
+</header>
+
+<!-- Tuiles live -->
+<div class="grid">
+  <div class="card">
+    <div class="card-label">Puissance</div>
+    <div class="card-value" id="livePower">–</div>
+    <div class="card-sub">Watts</div>
+  </div>
+  <div class="card">
+    <div class="card-label">Tension</div>
+    <div class="card-value" id="liveVoltage">–</div>
+    <div class="card-sub">Volts</div>
+  </div>
+  <div class="card">
+    <div class="card-label">Intensité</div>
+    <div class="card-value" id="liveCurrent">–</div>
+    <div class="card-sub">Ampères</div>
+  </div>
+  <div class="card">
+    <div class="card-label">Coût du jour</div>
+    <div class="card-value" id="todayCost">–</div>
+    <div class="card-sub" id="todayKwh">–</div>
+    <div class="card-sub" id="todayAbo" style="color:var(--muted)">–</div>
+  </div>
+  <div class="card">
+    <div class="card-label">Ce mois</div>
+    <div class="card-value" id="monthCost">–</div>
+    <div class="card-sub" id="monthKwh">–</div>
+    <div class="card-sub" id="monthProjection" style="color:var(--yellow)">–</div>
+  </div>
+</div>
+
+<!-- Coût aujourd'hui HP/HC -->
+<div class="section">
+  <h2>Aujourd'hui</h2>
+  <div class="cost-row">
+    <div class="cost-col hc">
+      <div class="label">Heures Creuses</div>
+      <div class="val" id="costHC">–</div>
+      <div style="font-size:.75rem;color:var(--muted)" id="kwhHC">–</div>
+    </div>
+    <div class="cost-col hp">
+      <div class="label">Heures Pleines</div>
+      <div class="val" id="costHP">–</div>
+      <div style="font-size:.75rem;color:var(--muted)" id="kwhHP">–</div>
+    </div>
+  </div>
+</div>
+
+<!-- Courbe 24h -->
+<div class="section">
+  <h2>Puissance — 24h</h2>
+  <div class="chart-wrap">
+    <canvas id="chartPower" height="120"></canvas>
+  </div>
+</div>
+
+<!-- Historique 30j -->
+<div class="section">
+  <h2>Historique 30 jours</h2>
+  <div class="chart-wrap">
+    <canvas id="chartHistory" height="120"></canvas>
+  </div>
+</div>
+
+<!-- Liste jours par mois -->
+<div class="section">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.75rem">
+    <button id="prevMonth" onclick="changeMonth(-1)" style="background:var(--card);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:.3rem .8rem;cursor:pointer;font-size:1rem">‹</button>
+    <span id="monthLabel" style="font-size:.9rem;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em"></span>
+    <button id="nextMonth" onclick="changeMonth(1)" style="background:var(--card);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:.3rem .8rem;cursor:pointer;font-size:1rem">›</button>
+  </div>
+  <div class="day-list" id="dayList"></div>
+</div>
+
+<!-- Alertes -->
+<div class="section">
+  <h2>Alertes</h2>
+  <div class="alerts-list" id="alertsList"><p class="no-data">Aucune alerte</p></div>
+</div>
+
+<script>
+const fmt = (n, d=1) => n == null ? '–' : (+n).toFixed(d)
+const fmtEur = n => n == null ? '–' : (+(n)).toFixed(2) + ' €'
+const fmtTs = ts => new Date(ts*1000).toLocaleTimeString('fr-FR', {hour:'2-digit',minute:'2-digit'})
+const fmtDate = s => new Date(s).toLocaleDateString('fr-FR', {day:'2-digit',month:'2-digit'})
+
+// ── Charts ────────────────────────────────────────────────────────────────
+const chartDefaults = {
+  responsive: true,
+  maintainAspectRatio: true,
+  plugins: { legend: { display: false }, tooltip: { mode: 'index', intersect: false } },
+  scales: {
+    x: { ticks: { color: '#8892a4', maxTicksLimit: 8, font:{size:11} }, grid: { color: '#2a2d3a' } },
+    y: { ticks: { color: '#8892a4', font:{size:11} }, grid: { color: '#2a2d3a' } }
+  }
+}
+
+const powerChart = new Chart(document.getElementById('chartPower'), {
+  type: 'line',
+  data: { labels: [], datasets: [{
+    label: 'W', data: [], borderColor: '#6366f1', backgroundColor: 'rgba(99,102,241,.1)',
+    fill: true, tension: 0.3, pointRadius: 0, borderWidth: 2
+  }]},
+  options: { ...chartDefaults, scales: { ...chartDefaults.scales, y: { ...chartDefaults.scales.y, title: { display: true, text: 'Watts', color:'#8892a4' } } } }
+})
+
+let historyDates = []
+const histChart = new Chart(document.getElementById('chartHistory'), {
+  type: 'bar',
+  data: { labels: [], datasets: [
+    { label: 'HC', data: [], backgroundColor: 'rgba(34,211,238,.7)', stack: 'cost' },
+    { label: 'HP', data: [], backgroundColor: 'rgba(249,115,22,.7)', stack: 'cost' }
+  ]},
+  options: { ...chartDefaults,
+    plugins: {
+      legend: { display: true, labels: { color: '#8892a4', font:{size:11} } },
+      tooltip: {
+        callbacks: {
+          footer: (items) => {
+            const idx = items[0].dataIndex
+            return `↗ Voir détail du ${historyDates[idx] ?? ''}`
+          }
+        }
+      }
+    },
+    scales: { ...chartDefaults.scales, y: { ...chartDefaults.scales.y, title: { display: true, text: '€', color:'#8892a4' } } },
+    onClick: (evt, elements) => {
+      if (!elements.length) return
+      const date = historyDates[elements[0].index]
+      if (date) window.location.href = `/day/${date}`
+    }
+  }
+})
+document.getElementById('chartHistory').style.cursor = 'pointer'
+
+// ── Live SSE ──────────────────────────────────────────────────────────────
+function connectSSE() {
+  const es = new EventSource('/api/live')
+  es.onmessage = e => {
+    const d = JSON.parse(e.data)
+    document.getElementById('livePower').textContent = fmt(d.power_w, 0)
+    document.getElementById('liveVoltage').textContent = fmt(d.voltage, 1)
+    document.getElementById('liveCurrent').textContent = fmt(d.current, 2)
+    document.getElementById('lastUpdate').textContent = 'MAJ ' + fmtTs(d.ts)
+    document.getElementById('liveDot').style.background = '#4ade80'
+  }
+  es.onerror = () => {
+    document.getElementById('liveDot').style.background = '#f87171'
+    es.close()
+    setTimeout(connectSSE, 5000)
+  }
+}
+connectSSE()
+
+// ── Tariff countdown ──────────────────────────────────────────────────────
+function hcStatus() {
+  const now = new Date()
+  const m = now.getHours() * 60 + now.getMinutes()
+  const inHC1 = m >= 14*60+26 && m < 16*60+56
+  const inHC2 = m >= 23*60+56 || m < 5*60+26
+  const isHC = inHC1 || inHC2
+  let left
+  if (isHC) {
+    if (inHC1) left = 16*60+56 - m
+    else if (m >= 23*60+56) left = 24*60 - m + 5*60+26
+    else left = 5*60+26 - m
+  } else {
+    if (m < 14*60+26) left = 14*60+26 - m
+    else if (m < 23*60+56) left = 23*60+56 - m
+    else left = 1
+  }
+  return { isHC, left }
+}
+function fmtMin(min) {
+  const h = Math.floor(min/60), m = min%60
+  return h > 0 ? `${h}h${String(m).padStart(2,'0')}` : `${m}min`
+}
+function updateTariffBadge() {
+  const { isHC, left } = hcStatus()
+  const badge = document.getElementById('tariffBadge')
+  badge.textContent = isHC ? `HC — encore ${fmtMin(left)}` : `HP — HC dans ${fmtMin(left)}`
+  badge.className = 'badge ' + (isHC ? 'badge-hc' : 'badge-hp')
+}
+updateTariffBadge()
+setInterval(updateTariffBadge, 60000)
+
+// ── API fetches ───────────────────────────────────────────────────────────
+async function loadReadings() {
+  const res = await fetch('/api/readings?hours=24')
+  const data = await res.json()
+  powerChart.data.labels = data.map(r => fmtTs(r.ts))
+  powerChart.data.datasets[0].data = data.map(r => r.power_w)
+  powerChart.update('none')
+  powerChart.resize()
+}
+
+async function loadToday() {
+  const res = await fetch('/api/today')
+  const d = await res.json()
+  document.getElementById('todayCost').textContent = fmtEur(d.total_avec_abo ?? d.total_cost)
+  document.getElementById('todayKwh').textContent = fmt((d.kwh_hc + d.kwh_hp), 2) + ' kWh'
+  document.getElementById('todayAbo').textContent = `dont ${fmtEur(d.abonnement)} abo`
+  document.getElementById('costHC').textContent = fmtEur(d.cost_hc)
+  document.getElementById('kwhHC').textContent = fmt(d.kwh_hc, 3) + ' kWh'
+  document.getElementById('costHP').textContent = fmtEur(d.cost_hp)
+  document.getElementById('kwhHP').textContent = fmt(d.kwh_hp, 3) + ' kWh'
+}
+
+async function loadStats() {
+  const res = await fetch('/api/stats')
+  const d = await res.json()
+  document.getElementById('monthCost').textContent = fmtEur(d.total_avec_abo ?? d.total_cost)
+  document.getElementById('monthKwh').textContent = fmt((d.kwh_hc + d.kwh_hp), 1) + ' kWh'
+  if (d.projection_fin_mois) {
+    document.getElementById('monthProjection').textContent = `→ fin de mois ~${fmtEur(d.projection_fin_mois)}`
+  }
+}
+
+let allHistory = []
+let currentMonthOffset = 0  // 0 = mois en cours, -1 = mois précédent, etc.
+
+function renderMonthList() {
+  const now = new Date()
+  const target = new Date(now.getFullYear(), now.getMonth() + currentMonthOffset, 1)
+  const yy = target.getFullYear()
+  const mm = target.getMonth()
+  const monthStr = target.toLocaleDateString('fr-FR', {month:'long', year:'numeric'})
+  document.getElementById('monthLabel').textContent = monthStr
+
+  const days = allHistory.filter(r => {
+    const d = new Date(r.date)
+    return d.getFullYear() === yy && d.getMonth() === mm
+  }).reverse()
+
+  const list = document.getElementById('dayList')
+  if (!days.length) {
+    list.innerHTML = '<p class="no-data">Aucune donnée pour ce mois</p>'
+    return
+  }
+  list.innerHTML = days.map(r => {
+    const d = new Date(r.date)
+    const daysInMonth = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate()
+    const abo = 19.56 / daysInMonth
+    const energie = (r.cost_hc ?? 0) + (r.cost_hp ?? 0)
+    const total = energie + abo
+    const kwh = ((r.kwh_hc ?? 0) + (r.kwh_hp ?? 0)).toFixed(1)
+    const label = d.toLocaleDateString('fr-FR', {weekday:'short', day:'2-digit', month:'short'})
+    return `<a class="day-row" href="/day/${r.date}">
+      <span class="day-date">${label}</span>
+      <span class="day-meta">${kwh} kWh</span>
+      <span class="day-cost">${fmtEur(total)}</span>
+    </a>`
+  }).join('')
+
+  // désactiver "suivant" si on est sur le mois courant
+  document.getElementById('nextMonth').disabled = currentMonthOffset >= 0
+  document.getElementById('nextMonth').style.opacity = currentMonthOffset >= 0 ? '.3' : '1'
+}
+
+function changeMonth(delta) {
+  if (currentMonthOffset + delta > 0) return
+  currentMonthOffset += delta
+  renderMonthList()
+}
+
+async function loadHistory() {
+  const res = await fetch('/api/history?days=365')
+  const data = await res.json()
+  allHistory = data
+  historyDates = data.map(r => r.date)
+
+  // graphique 30 derniers jours seulement
+  const last30 = data.slice(-30)
+  histChart.data.labels = last30.map(r => fmtDate(r.date))
+  histChart.data.datasets[0].data = last30.map(r => r.cost_hc)
+  histChart.data.datasets[1].data = last30.map(r => r.cost_hp)
+  histChart.update('none')
+  histChart.resize()
+
+  renderMonthList()
+}
+
+async function loadAlerts() {
+  const res = await fetch('/api/alerts')
+  const data = await res.json()
+  const el = document.getElementById('alertsList')
+  if (!data.length) { el.innerHTML = '<p class="no-data">Aucune alerte</p>'; return }
+  el.innerHTML = data.map(a => `
+    <div class="alert-item ${a.ack ? 'acked' : ''}" id="alert-${a.id}">
+      <div>
+        <span>${a.message}</span>
+        <span class="alert-time" style="margin-left:.5rem">${fmtTs(a.ts)}</span>
+      </div>
+      ${!a.ack ? `<button class="ack-btn" onclick="ackAlert(${a.id})">OK</button>` : ''}
+    </div>
+  `).join('')
+}
+
+async function ackAlert(id) {
+  await fetch(`/api/alerts/${id}/ack`, {method:'POST'})
+  loadAlerts()
+}
+
+// ── Init ──────────────────────────────────────────────────────────────────
+async function init() {
+  await Promise.all([loadReadings(), loadToday(), loadStats(), loadHistory(), loadAlerts()])
+}
+init()
+setInterval(() => { loadToday(); loadStats(); loadHistory(); loadAlerts() }, 60000)
+setInterval(loadReadings, 300000) // refresh courbe toutes les 5min
+</script>
+</body>
+</html>

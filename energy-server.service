@@ -1,0 +1,13 @@
+[Unit]
+Description=Energy Monitor Server
+After=network.target
+
+[Service]
+User=openclaw
+WorkingDirectory=/home/openclaw/projects/energy-monitor
+ExecStart=/home/openclaw/projects/energy-monitor/venv/bin/python3 /home/openclaw/projects/energy-monitor/server.py
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
