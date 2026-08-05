@@ -8,8 +8,8 @@ from datetime import datetime, timezone
 import pytz
 import logging
 
-from config import SHELLY_IP, ALERT_THRESHOLD_W, CALIBRATION_FACTOR
-from db import init_db, insert_reading, upsert_daily_cost, insert_alert, get_conn
+from config import SHELLY_IP, CALIBRATION_FACTOR
+from db import init_db, insert_reading, upsert_daily_cost, get_conn
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger(__name__)
@@ -66,20 +66,6 @@ def recompute_today():
     log.info(f"Coût recalculé pour {date_str}: HC={kwh_hc:.3f}kWh HP={kwh_hp:.3f}kWh")
 
 
-def check_alert(ts: int, power_w: float):
-    if power_w >= ALERT_THRESHOLD_W:
-        # Éviter le spam : max 1 alerte par heure
-        with get_conn() as conn:
-            recent = conn.execute(
-                "SELECT id FROM alerts WHERE ts > ? AND type='overload'",
-                (ts - 3600,)
-            ).fetchone()
-        if not recent:
-            msg = f"Puissance élevée : {power_w:.0f}W (seuil {ALERT_THRESHOLD_W}W)"
-            insert_alert(ts, "overload", power_w, msg)
-            log.warning(msg)
-
-
 def main():
     init_db()
     ts = int(time.time())
@@ -108,7 +94,6 @@ def main():
         f"{'HC' if hc else 'HP'}  energy={energy_wh:.0f}Wh"
     )
 
-    check_alert(ts, reading["power_w"])
     recompute_today()
 
 
