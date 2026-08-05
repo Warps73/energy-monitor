@@ -1,0 +1,231 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Recharge VE — Énergie Maison</title>
+<link rel="icon" type="image/png" sizes="512x512" href="/static/icon-512.png">
+<link rel="icon" type="image/png" sizes="192x192" href="/static/icon-192.png">
+<link rel="apple-touch-icon" sizes="180x180" href="/static/icon-180.png">
+<link rel="manifest" href="/static/manifest.webmanifest">
+<meta name="theme-color" content="#08a068">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Énergie">
+<style>
+  :root {
+    --bg: #0f1117;
+    --card: #1a1d27;
+    --border: #2a2d3a;
+    --text: #e2e8f0;
+    --muted: #8892a4;
+    --hp: #f97316;
+    --hc: #22d3ee;
+    --green: #4ade80;
+    --red: #f87171;
+    --yellow: #fbbf24;
+    --indigo: #6366f1;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: system-ui, sans-serif; min-height: 100vh; }
+  header { padding: 1rem 1.5rem; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 1rem; }
+  header a.back { color: var(--muted); text-decoration: none; font-size: .9rem; }
+  header a.back:hover { color: var(--text); }
+  header h1 { font-size: 1.1rem; font-weight: 600; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 1rem; padding: 1.5rem; }
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 1.25rem; }
+  .card-label { font-size: .75rem; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; margin-bottom: .4rem; }
+  .card-value { font-size: 2rem; font-weight: 700; line-height: 1; }
+  .card-sub { font-size: .8rem; color: var(--muted); margin-top: .3rem; }
+  .section { padding: 0 1.5rem 1.5rem; }
+  .section h2 { font-size: .9rem; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; margin-bottom: 1rem; }
+  .session-list { display: flex; flex-direction: column; gap: .5rem; }
+  .session-row { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 1rem; display: grid; grid-template-columns: 1fr auto; gap: .5rem; align-items: center; }
+  .session-row .s-date { font-size: .9rem; font-weight: 500; }
+  .session-row .s-meta { font-size: .8rem; color: var(--muted); margin-top: .25rem; }
+  .session-row .s-price { font-size: 1.1rem; font-weight: 700; }
+  .session-row .s-gain { font-size: .8rem; margin-top: .25rem; text-align: right; }
+  .no-data { color: var(--muted); font-size: .9rem; padding: 1rem 0; }
+  .caveat { background: rgba(251,191,36,.08); border: 1px solid rgba(251,191,36,.3); border-radius: 8px; padding: .75rem 1rem; margin-top: 1rem; font-size: .8rem; color: var(--muted); }
+  .caveat strong { color: var(--yellow); }
+  .nav-btn { background: var(--card); border: 1px solid var(--border); color: var(--text); border-radius: 8px; width: 2rem; height: 2rem; cursor: pointer; font-size: 1.1rem; line-height: 1; padding: 0; }
+  .nav-btn:hover:not(:disabled) { background: var(--border); }
+  .nav-btn:disabled { opacity: .35; cursor: not-allowed; }
+</style>
+</head>
+<body>
+
+<header>
+  <a href="/" class="back">← Retour</a>
+  <h1>🔌 Recharge VE</h1>
+  <div style="margin-left:auto;display:flex;align-items:center;gap:.5rem;font-size:.85rem">
+    <button id="prevMonth" class="nav-btn" title="Mois précédent">‹</button>
+    <span style="color:var(--muted);min-width:8rem;text-align:center" id="montaMonth">–</span>
+    <button id="nextMonth" class="nav-btn" title="Mois suivant">›</button>
+  </div>
+</header>
+
+<!-- Tuiles récap mois -->
+<div class="grid">
+  <div class="card">
+    <div class="card-label">Consommé</div>
+    <div class="card-value" id="mKwh">–</div>
+    <div class="card-sub" id="mSessions">–</div>
+  </div>
+  <div class="card">
+    <div class="card-label">Remboursement</div>
+    <div class="card-value" id="mReimb" style="color:var(--green)">–</div>
+    <div class="card-sub">à 0,20 €/kWh</div>
+  </div>
+  <div class="card">
+    <div class="card-label">Coût EDF estimé</div>
+    <div class="card-value" id="mCost">–</div>
+    <div class="card-sub" id="mHcHp">–</div>
+  </div>
+  <div class="card">
+    <div class="card-label">Gain estimé</div>
+    <div class="card-value" id="mGain">–</div>
+    <div class="card-sub" id="mGainRange" style="color:var(--muted)">–</div>
+  </div>
+</div>
+
+<!-- Dernière session -->
+<div class="section">
+  <h2>Dernière session</h2>
+  <div class="session-list" id="lastList">
+    <div class="no-data">Chargement…</div>
+  </div>
+</div>
+
+<!-- Sessions du mois -->
+<div class="section">
+  <h2>Sessions du mois</h2>
+  <div class="session-list" id="sessionsList">
+    <div class="no-data">Chargement…</div>
+  </div>
+  <div class="caveat" id="hcCaveat"></div>
+</div>
+
+<script>
+function currentMonthStr() {
+  const n = new Date()
+  return `${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,'0')}`
+}
+function viewedMonth() {
+  const p = new URLSearchParams(location.search)
+  return p.get('month') || currentMonthStr()
+}
+function shiftMonth(mstr, delta) {
+  const [y, m] = mstr.split('-').map(Number)
+  const d = new Date(y, m - 1 + delta, 1)
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`
+}
+function goToMonth(mstr) {
+  const url = new URL(location.href)
+  if (mstr === currentMonthStr()) url.searchParams.delete('month')
+  else url.searchParams.set('month', mstr)
+  location.href = url.toString()
+}
+
+async function loadMonta() {
+  const month = viewedMonth()
+  const url = month === currentMonthStr() ? '/api/monta/summary' : `/api/monta/summary?month=${month}`
+  const res = await fetch(url)
+  const d = await res.json()
+  if (d.error) {
+    document.getElementById('mKwh').textContent = '⚠️'
+    document.getElementById('mSessions').textContent = d.error
+    return
+  }
+
+  const eur = n => (n >= 0 ? '+' : '') + n.toFixed(2) + ' €'
+  const monthNames = ['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre']
+  const [y, m] = d.month.split('-').map(Number)
+  document.getElementById('montaMonth').textContent = `${monthNames[m-1]} ${y}`
+  document.getElementById('nextMonth').disabled = d.is_current_month
+  document.getElementById('mKwh').textContent = d.total_kwh.toFixed(1) + ' kWh'
+  document.getElementById('mSessions').textContent = d.sessions_count + ' session' + (d.sessions_count>1?'s':'')
+  document.getElementById('mReimb').textContent = d.reimbursement.toFixed(2) + ' €'
+  document.getElementById('mCost').textContent = d.cost_edf_estimated.toFixed(2) + ' €'
+  document.getElementById('mHcHp').textContent = `HC ${d.hc_kwh.toFixed(1)} · HP ${d.hp_kwh.toFixed(1)} kWh`
+  const gEl = document.getElementById('mGain')
+  gEl.textContent = eur(d.gain_estimated)
+  gEl.style.color = d.gain_estimated >= 0 ? 'var(--green)' : 'var(--red)'
+  const rangeEl = document.getElementById('mGainRange')
+  if (d.hc_source === 'shelly') {
+    rangeEl.innerHTML = '📡 mesure Shelly'
+    rangeEl.style.color = 'var(--green)'
+  } else {
+    rangeEl.textContent = `fourchette ${eur(d.gain_worst_case)} → ${eur(d.gain_best_case)}`
+    rangeEl.style.color = 'var(--muted)'
+  }
+  const cav = document.getElementById('hcCaveat')
+  if (d.hc_source === 'shelly') {
+    cav.innerHTML = '<strong>📡 Précision Shelly</strong> — La répartition HC/HP vient des mesures réelles du compteur EM (seuil charge > 3 kW, baseline maison retirée). Résolution ~15 min.'
+    cav.style.background = 'rgba(74,222,128,.08)'
+    cav.style.borderColor = 'rgba(74,222,128,.3)'
+    cav.querySelector('strong').style.color = 'var(--green)'
+  } else if (d.hc_source === 'mixed') {
+    cav.innerHTML = '<strong>⚠️ Mix</strong> — Certaines sessions viennent des mesures Shelly, d\'autres du prorata temps (données Shelly manquantes). Voir badge sur chaque session.'
+  } else {
+    cav.innerHTML = '<strong>Note</strong> — Estimation au prorata du temps plug-in → plug-out. Fourchette réaliste : bornes best/worst affichées.'
+  }
+
+  const f = iso => {
+    if (!iso) return '–'
+    return new Date(iso).toLocaleString('fr-FR', {day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})
+  }
+
+  const renderRow = s => {
+    const spTxt = s.stoppedAt ? f(s.stoppedAt) : 'en cours'
+    const gainColor = s.gain_estimated >= 0 ? 'var(--green)' : 'var(--red)'
+    const hcPct = s.hc_ratio !== null ? Math.round(s.hc_ratio * 100) + '% HC' : '—'
+    const srcBadge = s.hc_source === 'shelly' ? '📡' : '≈'
+    return `
+      <div class="session-row">
+        <div>
+          <div class="s-date">${f(s.startedAt)} → ${spTxt}</div>
+          <div class="s-meta">${s.kwh.toFixed(1)} kWh · ${srcBadge} ${hcPct} · coût EDF ${s.cost_edf_estimated.toFixed(2)} €</div>
+        </div>
+        <div>
+          <div class="s-price">${s.price.toFixed(2)} €</div>
+          <div class="s-gain" style="color:${gainColor}">${eur(s.gain_estimated)}</div>
+        </div>
+      </div>`
+  }
+
+  const lastEl = document.getElementById('lastList')
+  if (d.last_session) {
+    const ls = d.last_session
+    const spTxt = ls.stoppedAt ? f(ls.stoppedAt) : 'en cours'
+    lastEl.innerHTML = `
+      <div class="session-row">
+        <div>
+          <div class="s-date">${f(ls.startedAt)} → ${spTxt}</div>
+          <div class="s-meta">${ls.kwh.toFixed(1)} kWh · état : ${ls.state} · ${ls.humanReadableId}</div>
+        </div>
+        <div>
+          <div class="s-price">${ls.price.toFixed(2)} €</div>
+        </div>
+      </div>`
+  } else {
+    lastEl.innerHTML = '<div class="no-data">Aucune session enregistrée.</div>'
+  }
+
+  const listEl = document.getElementById('sessionsList')
+  if (d.sessions && d.sessions.length) {
+    listEl.innerHTML = d.sessions.map(renderRow).join('')
+  } else {
+    listEl.innerHTML = '<div class="no-data">Aucune session ce mois-ci.</div>'
+  }
+}
+
+document.getElementById('prevMonth').addEventListener('click', () => goToMonth(shiftMonth(viewedMonth(), -1)))
+document.getElementById('nextMonth').addEventListener('click', () => goToMonth(shiftMonth(viewedMonth(), +1)))
+
+loadMonta()
+// Refresh auto uniquement pour le mois courant (mois passés sont figés)
+if (viewedMonth() === currentMonthStr()) setInterval(loadMonta, 300000)
+</script>
+</body>
+</html>

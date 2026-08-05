@@ -9,13 +9,17 @@ import sys
 from datetime import datetime, timedelta
 import pytz
 
-from config import CALIBRATION_FACTOR, TARIF_HC, TARIF_HP, HC_WINDOWS
+from config import CALIBRATION_FACTOR, HC_WINDOWS, tariff_at
 from db import init_db, upsert_daily_cost
 
 SERVER_URL = "https://shelly-66-eu.shelly.cloud"
 DEVICE_ID  = "d885ac0ae7b4"
 EMAIL      = "titi_du_73@hotmail.fr"
 TZ         = pytz.timezone("Europe/Paris")
+
+# Notification Telegram directe (récap autonome, sans passer par l'IA)
+TG_TOKEN_FILE = "/home/openclaw/.openclaw/secrets/telegram-default.token"
+TG_CHAT_ID    = "8622835280"
 
 
 def get_api_key() -> str:
@@ -76,7 +80,47 @@ def sync_day(api_key: str, date_str: str) -> tuple:
     return kwh_hc, kwh_hp
 
 
-def main(days: int = 30):
+def _fr(x: float, dec: int = 3) -> str:
+    """Formate un nombre à la française (virgule décimale)."""
+    return f"{x:.{dec}f}".replace(".", ",")
+
+
+def build_recap(results: list) -> str:
+    """Construit le récap texte déterministe (pas d'IA)."""
+    lines = ["🔋 Sync énergie (Shelly Cloud)", ""]
+    for date_str, kwh_hc, kwh_hp, total, cost in results:
+        d = f"{date_str[8:10]}/{date_str[5:7]}"
+        lines.append(
+            f"• {d} : {_fr(total)} kWh "
+            f"(HC {_fr(kwh_hc)} · HP {_fr(kwh_hp)}) → {_fr(cost, 2)} €"
+        )
+    lines.append("")
+    lines.append(f"✅ {len(results)} jours mis à jour dans le dashboard.")
+    return "\n".join(lines)
+
+
+def send_telegram(text: str) -> None:
+    """Poste le récap directement via l'API bot Telegram (0 token IA)."""
+    try:
+        with open(TG_TOKEN_FILE) as f:
+            token = f.read().strip()
+    except OSError as e:
+        print(f"Notif Telegram ignorée — token illisible : {e}")
+        return
+    try:
+        r = requests.post(
+            f"https://api.telegram.org/bot{token}/sendMessage",
+            json={"chat_id": TG_CHAT_ID, "text": text,
+                  "disable_notification": True},
+            timeout=15,
+        )
+        r.raise_for_status()
+        print("Récap Telegram envoyé.")
+    except Exception as e:
+        print(f"Échec envoi Telegram : {e}")
+
+
+def main(days: int = 30, notify: bool = False):
     init_db()
     api_key = get_api_key()
 
@@ -90,7 +134,8 @@ def main(days: int = 30):
             kwh_hc, kwh_hp = sync_day(api_key, date_str)
             upsert_daily_cost(date_str, kwh_hc, kwh_hp)
             total = kwh_hc + kwh_hp
-            cost  = kwh_hc * TARIF_HC + kwh_hp * TARIF_HP
+            t = tariff_at(date_str)
+            cost  = kwh_hc * t["hc"] + kwh_hp * t["hp"]
             print(f"{date_str}: HC={kwh_hc:.3f} HP={kwh_hp:.3f} total={total:.3f} kWh → {cost:.2f}€")
             results.append((date_str, kwh_hc, kwh_hp, total, cost))
         except Exception as e:
@@ -98,10 +143,15 @@ def main(days: int = 30):
 
     print(f"\nSync terminé : {len(results)} jours mis à jour.")
 
+    if notify and results:
+        send_telegram(build_recap(results))
+
 
 if __name__ == "__main__":
     import argparse
     p = argparse.ArgumentParser()
     p.add_argument("--days", type=int, default=30, help="Nb jours à syncer (défaut: 30)")
+    p.add_argument("--notify", action="store_true",
+                   help="Poste un récap sur Telegram en fin de sync")
     args = p.parse_args()
-    main(args.days)
+    main(args.days, args.notify)

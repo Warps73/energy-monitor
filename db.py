@@ -67,9 +67,10 @@ def insert_reading(ts: int, power_w: float, energy_wh: float, voltage: float, cu
 
 
 def upsert_daily_cost(date_str: str, kwh_hc: float, kwh_hp: float):
-    from config import TARIF_HC, TARIF_HP
-    cost_hc = kwh_hc * TARIF_HC
-    cost_hp = kwh_hp * TARIF_HP
+    from config import tariff_at
+    t = tariff_at(date_str)
+    cost_hc = kwh_hc * t["hc"]
+    cost_hp = kwh_hp * t["hp"]
     total = cost_hc + cost_hp
     with get_conn() as conn:
         conn.execute("""
