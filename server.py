@@ -12,8 +12,8 @@ from fastapi import FastAPI
 from fastapi.responses import HTMLResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
-from config import SHELLY_IP, TARIF_HC, TARIF_HP, ALERT_THRESHOLD_W, ABONNEMENT_MENSUEL, CALIBRATION_FACTOR, tariff_at
-from db import init_db, get_conn, insert_alert
+from config import SHELLY_IP, TARIF_HC, TARIF_HP, ABONNEMENT_MENSUEL, CALIBRATION_FACTOR, tariff_at
+from db import init_db, get_conn
 
 
 # ── .env.local loader (aucune dép externe) ──────────────────────────────────
@@ -120,22 +120,6 @@ def history(days: int = 30):
         d["abo_day"] = round(tariff_at(d["date"])["abo"] / days_in_month, 4)
         out.append(d)
     return out
-
-
-@app.get("/api/alerts")
-def alerts(limit: int = 20):
-    with get_conn() as conn:
-        rows = conn.execute(
-            "SELECT * FROM alerts ORDER BY ts DESC LIMIT ?", (limit,)
-        ).fetchall()
-    return [dict(r) for r in rows]
-
-
-@app.post("/api/alerts/{alert_id}/ack")
-def ack_alert(alert_id: int):
-    with get_conn() as conn:
-        conn.execute("UPDATE alerts SET ack=1 WHERE id=?", (alert_id,))
-    return {"ok": True}
 
 
 @app.get("/api/stats")

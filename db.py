@@ -30,15 +30,6 @@ def init_db():
                 cost_hp    REAL NOT NULL DEFAULT 0,
                 total_cost REAL NOT NULL DEFAULT 0
             );
-
-            CREATE TABLE IF NOT EXISTS alerts (
-                id        INTEGER PRIMARY KEY AUTOINCREMENT,
-                ts        INTEGER NOT NULL,
-                type      TEXT NOT NULL,
-                value_w   REAL,
-                message   TEXT,
-                ack       INTEGER NOT NULL DEFAULT 0
-            );
         """)
 
 
@@ -81,11 +72,3 @@ def upsert_daily_cost(date_str: str, kwh_hc: float, kwh_hp: float):
                 cost_hc=excluded.cost_hc, cost_hp=excluded.cost_hp,
                 total_cost=excluded.total_cost
         """, (date_str, kwh_hc, kwh_hp, cost_hc, cost_hp, total))
-
-
-def insert_alert(ts: int, type_: str, value_w: float, message: str):
-    with get_conn() as conn:
-        conn.execute(
-            "INSERT INTO alerts (ts, type, value_w, message) VALUES (?,?,?,?)",
-            (ts, type_, value_w, message)
-        )

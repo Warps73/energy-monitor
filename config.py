@@ -38,7 +38,4 @@ HC_WINDOWS = [
     (0,             5 * 60 + 26),    # 00h00 – 05h26
 ]
 
-# Seuil alerte puissance (W)
-ALERT_THRESHOLD_W = 7000
-
 DB_PATH = "/home/openclaw/projects/energy-monitor/energy.db"

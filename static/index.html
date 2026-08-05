@@ -72,12 +72,6 @@
   .cost-col .val { font-size: 1.5rem; font-weight: 700; }
   .cost-col.hc .val { color: var(--hc); }
   .cost-col.hp .val { color: var(--hp); }
-  .alerts-list { display: flex; flex-direction: column; gap: .5rem; }
-  .alert-item { background: var(--card); border: 1px solid var(--border); border-left: 3px solid var(--red); border-radius: 8px; padding: .75rem 1rem; display: flex; align-items: center; justify-content: space-between; font-size: .85rem; }
-  .alert-item.acked { opacity: .4; border-left-color: var(--border); }
-  .alert-time { color: var(--muted); font-size: .75rem; }
-  .ack-btn { background: none; border: 1px solid var(--border); color: var(--muted); border-radius: 6px; padding: .2rem .6rem; cursor: pointer; font-size: .75rem; }
-  .ack-btn:hover { border-color: var(--text); color: var(--text); }
   .no-data { color: var(--muted); font-size: .85rem; padding: .5rem 0; }
   @media(max-width:600px) { .cost-row { flex-direction: column; } }
   .day-list { display: flex; flex-direction: column; gap: .4rem; margin-top: 1rem; }
@@ -255,12 +249,6 @@
     <button id="nextMonth" onclick="changeMonth(1)" style="background:var(--card);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:.3rem .8rem;cursor:pointer;font-size:1rem">›</button>
   </div>
   <div class="day-list" id="dayList"></div>
-</div>
-
-<!-- Alertes -->
-<div class="section">
-  <h2>Alertes</h2>
-  <div class="alerts-list" id="alertsList"><p class="no-data">Aucune alerte</p></div>
 </div>
 
 <script>
@@ -473,27 +461,6 @@ async function loadHistory() {
   histChart.resize()
 
   renderMonthList()
-}
-
-async function loadAlerts() {
-  const res = await fetch('/api/alerts')
-  const data = await res.json()
-  const el = document.getElementById('alertsList')
-  if (!data.length) { el.innerHTML = '<p class="no-data">Aucune alerte</p>'; return }
-  el.innerHTML = data.map(a => `
-    <div class="alert-item ${a.ack ? 'acked' : ''}" id="alert-${a.id}">
-      <div>
-        <span>${a.message}</span>
-        <span class="alert-time" style="margin-left:.5rem">${fmtTs(a.ts)}</span>
-      </div>
-      ${!a.ack ? `<button class="ack-btn" onclick="ackAlert(${a.id})">OK</button>` : ''}
-    </div>
-  `).join('')
-}
-
-async function ackAlert(id) {
-  await fetch(`/api/alerts/${id}/ack`, {method:'POST'})
-  loadAlerts()
 }
 
 // ── Monta EV (tuile résumé + bottom sheet inline) ─────────────────────────
@@ -709,10 +676,10 @@ sheetEl.addEventListener('touchend', e => {
 
 // ── Init ──────────────────────────────────────────────────────────────────
 async function init() {
-  await Promise.all([loadReadings(), loadToday(), loadStats(), loadHistory(), loadAlerts(), loadMonta()])
+  await Promise.all([loadReadings(), loadToday(), loadStats(), loadHistory(), loadMonta()])
 }
 init()
-setInterval(() => { loadToday(); loadStats(); loadHistory(); loadAlerts() }, 60000)
+setInterval(() => { loadToday(); loadStats(); loadHistory() }, 60000)
 setInterval(loadReadings, 300000) // refresh courbe toutes les 5min
 setInterval(loadMonta, 300000)    // Monta cache backend 5min, poll aligné
 </script>
