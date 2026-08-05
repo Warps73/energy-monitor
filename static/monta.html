@@ -65,7 +65,7 @@
   </div>
 </header>
 
-<!-- Tuiles récap mois -->
+<!-- Month recap tiles -->
 <div class="grid">
   <div class="card">
     <div class="card-label">Consommé</div>
@@ -89,7 +89,7 @@
   </div>
 </div>
 
-<!-- Dernière session -->
+<!-- Last session -->
 <div class="section">
   <h2>Dernière session</h2>
   <div class="session-list" id="lastList">
@@ -97,7 +97,7 @@
   </div>
 </div>
 
-<!-- Sessions du mois -->
+<!-- Sessions this month -->
 <div class="section">
   <h2>Sessions du mois</h2>
   <div class="session-list" id="sessionsList">
@@ -224,7 +224,7 @@ document.getElementById('prevMonth').addEventListener('click', () => goToMonth(s
 document.getElementById('nextMonth').addEventListener('click', () => goToMonth(shiftMonth(viewedMonth(), +1)))
 
 loadMonta()
-// Refresh auto uniquement pour le mois courant (mois passés sont figés)
+// Auto-refresh only for the current month (past months are frozen)
 if (viewedMonth() === currentMonthStr()) setInterval(loadMonta, 300000)
 </script>
 </body>

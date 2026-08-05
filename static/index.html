@@ -12,7 +12,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Énergie">
-<!-- Chart.js vendored local (plus de dépendance CDN, évite l'écran noir) -->
+<!-- Chart.js vendored locally (no CDN dependency, avoids blank screen) -->
 <script>
 /**
  * Skipped minification because the original files appears to be already minified.
@@ -208,7 +208,7 @@
   </div>
 </div>
 
-<!-- Coût aujourd'hui HP/HC -->
+<!-- Today's cost HP/HC -->
 <div class="section">
   <h2>Aujourd'hui</h2>
   <div class="cost-row">
@@ -241,7 +241,7 @@
   </div>
 </div>
 
-<!-- Liste jours par mois -->
+<!-- Day list per month -->
 <div class="section">
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.75rem">
     <button id="prevMonth" onclick="changeMonth(-1)" style="background:var(--card);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:.3rem .8rem;cursor:pointer;font-size:1rem">‹</button>
@@ -400,7 +400,7 @@ async function loadStats() {
 }
 
 let allHistory = []
-let currentMonthOffset = 0  // 0 = mois en cours, -1 = mois précédent, etc.
+let currentMonthOffset = 0  // 0 = current month, -1 = previous month, etc.
 
 function renderMonthList() {
   const now = new Date()
@@ -435,7 +435,7 @@ function renderMonthList() {
     </a>`
   }).join('')
 
-  // désactiver "suivant" si on est sur le mois courant
+  // disable "next" when on the current month
   document.getElementById('nextMonth').disabled = currentMonthOffset >= 0
   document.getElementById('nextMonth').style.opacity = currentMonthOffset >= 0 ? '.3' : '1'
 }
@@ -452,7 +452,7 @@ async function loadHistory() {
   allHistory = data
   historyDates = data.map(r => r.date)
 
-  // graphique 30 derniers jours seulement
+  // chart: last 30 days only
   const last30 = data.slice(-30)
   histChart.data.labels = last30.map(r => fmtDate(r.date))
   histChart.data.datasets[0].data = last30.map(r => r.cost_hc)
@@ -463,7 +463,7 @@ async function loadHistory() {
   renderMonthList()
 }
 
-// ── Monta EV (tuile résumé + bottom sheet inline) ─────────────────────────
+// ── Monta EV (summary tile + inline bottom sheet) ─────────────────────────
 const _montaCache = { current: null, byMonth: {} }
 
 function currentMonthStr() {
@@ -483,8 +483,8 @@ async function fetchMonta(month) {
 }
 
 function updateNetMonthTile() {
-  // Net TTC ce mois = énergie maison + abo prorata − remboursement Monta.
-  // Ce qu'on paie vraiment de sa poche après remboursement borne.
+  // Net cost this month = home energy + prorated subscription − Monta reimbursement.
+  // What is actually paid out of pocket after the charger reimbursement.
   if (!_lastStats) return
   const monthVal = _lastStats.total_avec_abo ?? _lastStats.total_cost ?? 0
   const reimb = _montaCache.current?.reimbursement ?? 0
@@ -511,7 +511,7 @@ async function loadMonta() {
     document.getElementById('montaTileKwh').textContent = `${d.total_kwh.toFixed(1)} kWh · ${d.sessions_count} session${d.sessions_count>1?'s':''}`
     document.getElementById('montaTileReimb').textContent = `remboursé ${d.reimbursement.toFixed(2)} €`
     updateNetMonthTile()
-    // Si la sheet est ouverte sur le mois courant, rafraîchir aussi.
+    // If the sheet is open on the current month, refresh it too.
     if (sheetState.open && sheetState.month === d.month) renderSheet(d)
   } catch (e) {
     document.getElementById('montaTileGain').textContent = '⚠️'
@@ -612,7 +612,7 @@ async function loadSheetMonth(month) {
   const cached = _montaCache.byMonth[month]
   if (cached) {
     renderSheet(cached)
-    // Rafraîchir en tâche de fond
+    // Refresh in the background
     fetchMonta(month).then(d => { if (!d.error) { _montaCache.byMonth[month] = d; if (sheetState.month === month) renderSheet(d) } }).catch(()=>{})
     return
   }
@@ -655,7 +655,7 @@ document.getElementById('sheetNextMonth').addEventListener('click', () => {
   loadSheetMonth(next)
 })
 
-// Swipe-down pour fermer (mobile)
+// Swipe down to close (mobile)
 let touchStartY = null
 const sheetEl = document.getElementById('montaSheet')
 sheetEl.addEventListener('touchstart', e => { touchStartY = e.touches[0].clientY }, { passive: true })
@@ -680,8 +680,8 @@ async function init() {
 }
 init()
 setInterval(() => { loadToday(); loadStats(); loadHistory() }, 60000)
-setInterval(loadReadings, 300000) // refresh courbe toutes les 5min
-setInterval(loadMonta, 300000)    // Monta cache backend 5min, poll aligné
+setInterval(loadReadings, 300000) // refresh curve every 5 min
+setInterval(loadMonta, 300000)    // backend Monta cache is 5 min, poll aligned
 </script>
 </body>
 </html>

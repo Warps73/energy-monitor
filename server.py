@@ -16,7 +16,7 @@ from config import SHELLY_IP, TARIF_HC, TARIF_HP, ABONNEMENT_MENSUEL, CALIBRATIO
 from db import init_db, get_conn
 
 
-# ── .env.local loader (aucune dép externe) ──────────────────────────────────
+# ── .env.local loader (no external dependency) ──────────────────────────────
 def _load_env_local():
     p = Path(__file__).parent / ".env.local"
     if not p.exists():
@@ -31,7 +31,7 @@ def _load_env_local():
 _load_env_local()
 
 
-def abonnement_jour(date_str: str) -> float:
+def subscription_per_day(date_str: str) -> float:
     d = datetime.strptime(date_str, "%Y-%m-%d")
     return ABONNEMENT_MENSUEL / calendar.monthrange(d.year, d.month)[1]
 
@@ -94,7 +94,7 @@ def today_cost():
         row = conn.execute(
             "SELECT * FROM daily_costs WHERE date=?", (date_str,)
         ).fetchone()
-    abo = abonnement_jour(date_str)
+    abo = subscription_per_day(date_str)
     if row:
         d = dict(row)
         d["abonnement"] = round(abo, 3)
@@ -124,12 +124,12 @@ def history(days: int = 30):
 
 @app.get("/api/stats")
 def stats():
-    """Mois en cours : total kWh et coût avec abonnement + projection fin de mois."""
+    """Current month: total kWh and cost incl. subscription + end-of-month projection."""
     now = datetime.now()
     month = now.strftime("%Y-%m")
     days_in_month = calendar.monthrange(now.year, now.month)[1]
     day_of_month = now.day
-    abo_mois = ABONNEMENT_MENSUEL
+    monthly_sub = ABONNEMENT_MENSUEL
 
     with get_conn() as conn:
         row = conn.execute("""
@@ -138,22 +138,22 @@ def stats():
             FROM daily_costs WHERE date LIKE ?
         """, (f"{month}%",)).fetchone()
 
-    energie = row["total_cost"] if row and row["total_cost"] else 0
+    energy_cost = row["total_cost"] if row and row["total_cost"] else 0
     kwh_hc  = row["kwh_hc"]    if row and row["kwh_hc"]    else 0
     kwh_hp  = row["kwh_hp"]    if row and row["kwh_hp"]    else 0
-    nb_jours = row["nb_jours"] if row and row["nb_jours"]  else 1
+    n_days  = row["nb_jours"]  if row and row["nb_jours"]  else 1
 
-    abo_prorata = abo_mois * day_of_month / days_in_month
-    total_avec_abo = round(energie + abo_prorata, 2)
+    sub_prorated = monthly_sub * day_of_month / days_in_month
+    total_avec_abo = round(energy_cost + sub_prorated, 2)
 
-    # Projection fin de mois
-    avg_jour_energie = energie / nb_jours if nb_jours else 0
-    projection = round(avg_jour_energie * days_in_month + abo_mois, 2)
+    # End-of-month projection
+    avg_daily_energy_cost = energy_cost / n_days if n_days else 0
+    projection = round(avg_daily_energy_cost * days_in_month + monthly_sub, 2)
 
     return {
         "kwh_hc": kwh_hc, "kwh_hp": kwh_hp,
-        "total_cost": round(energie, 2),
-        "abonnement_prorata": round(abo_prorata, 2),
+        "total_cost": round(energy_cost, 2),
+        "abonnement_prorata": round(sub_prorated, 2),
         "total_avec_abo": total_avec_abo,
         "projection_fin_mois": projection,
     }
@@ -164,9 +164,9 @@ def day_detail(date_str: str):
     try:
         d = datetime.strptime(date_str, "%Y-%m-%d")
     except ValueError:
-        return {"error": "format invalide, utiliser YYYY-MM-DD"}
+        return {"error": "invalid format, expected YYYY-MM-DD"}
 
-    abo = abonnement_jour(date_str)
+    abo = subscription_per_day(date_str)
 
     with get_conn() as conn:
         row = conn.execute("SELECT * FROM daily_costs WHERE date=?", (date_str,)).fetchone()
@@ -217,7 +217,7 @@ def _monta_token():
     cid = os.environ.get("MONTA_CLIENT_ID")
     csec = os.environ.get("MONTA_CLIENT_SECRET")
     if not cid or not csec:
-        raise RuntimeError("MONTA_CLIENT_ID / MONTA_CLIENT_SECRET manquants (.env.local)")
+        raise RuntimeError("MONTA_CLIENT_ID / MONTA_CLIENT_SECRET missing (.env.local)")
     r = requests.post(
         f"{MONTA_BASE}/auth/token",
         json={"clientId": cid, "clientSecret": csec},
@@ -243,7 +243,7 @@ def _monta_get(path, params=None):
 
 
 def _monta_hc_ratio(start_utc, stop_utc):
-    """Ratio HC au prorata du temps [plug-in, plug-out] — approximation."""
+    """Off-peak (HC) ratio prorated over [plug-in, plug-out] time — approximation."""
     if not start_utc or not stop_utc:
         return None
     a = datetime.fromisoformat(start_utc.replace("Z", "+00:00")).astimezone()
@@ -271,10 +271,10 @@ CAR_BASELINE_W = 250
 
 
 def _shelly_car_split(start_utc, stop_utc):
-    """Répartition HC/HP réelle depuis Shelly EM (readings).
+    """Actual HC/HP split measured by the Shelly EM (readings table).
 
-    Détecte les intervalles où power > CAR_CHARGING_MIN_W = voiture en charge.
-    Retourne {hc_ratio, shelly_kwh_hc, shelly_kwh_hp, samples} ou None si pas de données.
+    Intervals where power > CAR_CHARGING_MIN_W are treated as car charging.
+    Returns {hc_ratio, shelly_kwh_hc, shelly_kwh_hp, samples}, or None if no data.
     """
     if not start_utc or not stop_utc:
         return None
@@ -367,7 +367,7 @@ def _monta_compute_summary(month=None):
     total_cost = sum(s.get("cost") or 0 for s in sessions)
 
     def _session_split(s):
-        """Retourne (hc_ratio, source) — 'shelly' si dispo, sinon 'prorata'."""
+        """Returns (hc_ratio, source) — 'shelly' when available, else 'prorata'."""
         shelly = _shelly_car_split(s.get("startedAt"), s.get("stoppedAt"))
         if shelly and shelly["samples"] >= 3:
             return shelly["hc_ratio"], "shelly"
@@ -381,8 +381,8 @@ def _monta_compute_summary(month=None):
 
     hc_kwh, hp_kwh = 0.0, 0.0
     cost_est = 0.0
-    cost_best = 0.0  # tout HC au tarif d'époque
-    cost_worst = 0.0  # tout HP au tarif d'époque
+    cost_best = 0.0   # everything at HC, at the tariff in effect at the time
+    cost_worst = 0.0  # everything at HP, at the tariff in effect at the time
     session_splits = {}
     for s in sessions:
         ratio, source = _session_split(s)
@@ -400,8 +400,8 @@ def _monta_compute_summary(month=None):
         cost_worst += k * t["hp"]
     n_shelly = sum(1 for r, src in session_splits.values() if src == "shelly")
 
-    # Dernière session : la plus récente du mois affiché. Fallback API uniquement
-    # pour le mois en cours (sinon on afficherait une session hors-mois).
+    # Last session: the most recent of the displayed month. API fallback only for
+    # the current month (otherwise we would show an out-of-month session).
     last = None
     if sessions:
         last_s = sessions[0]
@@ -491,7 +491,7 @@ def monta_summary(month: str | None = None):
             y, m = [int(x) for x in month.split("-")]
             datetime(y, m, 1)
         except Exception:
-            return {"error": f"month invalide: {month} (attendu YYYY-MM)"}
+            return {"error": f"invalid month: {month} (expected YYYY-MM)"}
         key = f"{y:04d}-{m:02d}"
     else:
         key = now_local.strftime("%Y-%m")
@@ -504,8 +504,8 @@ def monta_summary(month: str | None = None):
 
 @app.on_event("startup")
 def _warmup_monta_cache():
-    """Précharge le mois courant en arrière-plan pour que le premier hit
-    utilisateur soit instantané (au lieu d'attendre le paging Monta + rate limit)."""
+    """Preload the current month in the background so the first user hit is
+    instant (instead of waiting on Monta paging + rate limit)."""
     import threading
 
     def _warm():

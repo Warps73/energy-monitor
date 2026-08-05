@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Sync les données journalières depuis la Shelly Cloud API vers daily_costs.
-Utilise les compteurs Wh internes (précis) plutôt que les mesures 15min locales.
+Sync daily data from the Shelly Cloud API into daily_costs.
+Uses the device's internal Wh counters (accurate) rather than the local 15-min samples.
 """
 import subprocess
 import requests
@@ -17,7 +17,8 @@ DEVICE_ID  = "d885ac0ae7b4"
 EMAIL      = "titi_du_73@hotmail.fr"
 TZ         = pytz.timezone("Europe/Paris")
 
-# Notification Telegram directe (récap autonome, sans passer par l'IA)
+# Direct Telegram notification (self-contained recap, no AI involved)
+# Recap text is intentionally in French — it's a user-facing notification.
 TG_TOKEN_FILE = "/home/openclaw/.openclaw/secrets/telegram-default.token"
 TG_CHAT_ID    = "8622835280"
 
@@ -29,12 +30,12 @@ def get_api_key() -> str:
     )
     key = result.stdout.strip()
     if not key:
-        sys.exit("Clé API Shelly introuvable — secret-tool lookup a échoué.")
+        sys.exit("Shelly API key not found — secret-tool lookup failed.")
     return key
 
 
 def hc_fraction(hour: int) -> float:
-    """Fraction de l'heure 'hour' (0-23) qui tombe en heures creuses."""
+    """Fraction of hour 'hour' (0-23) that falls within off-peak (HC) windows."""
     start_min = hour * 60
     end_min   = start_min + 60
     hc_min = 0.0
@@ -47,7 +48,7 @@ def hc_fraction(hour: int) -> float:
 
 
 def fetch_day(api_key: str, date_str: str) -> list:
-    """Retourne la liste des Wh horaires pour une journée (heure locale Paris)."""
+    """Return the list of hourly Wh values for one day (Paris local time)."""
     params = {
         "auth_key":   api_key,
         "date_range": "day",
@@ -81,12 +82,12 @@ def sync_day(api_key: str, date_str: str) -> tuple:
 
 
 def _fr(x: float, dec: int = 3) -> str:
-    """Formate un nombre à la française (virgule décimale)."""
+    """Format a number French-style (decimal comma)."""
     return f"{x:.{dec}f}".replace(".", ",")
 
 
 def build_recap(results: list) -> str:
-    """Construit le récap texte déterministe (pas d'IA)."""
+    """Build the deterministic recap text (no AI). French: user-facing message."""
     lines = ["🔋 Sync énergie (Shelly Cloud)", ""]
     for date_str, kwh_hc, kwh_hp, total, cost in results:
         d = f"{date_str[8:10]}/{date_str[5:7]}"
@@ -100,12 +101,12 @@ def build_recap(results: list) -> str:
 
 
 def send_telegram(text: str) -> None:
-    """Poste le récap directement via l'API bot Telegram (0 token IA)."""
+    """Post the recap directly through the Telegram bot API (zero AI tokens)."""
     try:
         with open(TG_TOKEN_FILE) as f:
             token = f.read().strip()
     except OSError as e:
-        print(f"Notif Telegram ignorée — token illisible : {e}")
+        print(f"Telegram notification skipped — unreadable token: {e}")
         return
     try:
         r = requests.post(
@@ -115,9 +116,9 @@ def send_telegram(text: str) -> None:
             timeout=15,
         )
         r.raise_for_status()
-        print("Récap Telegram envoyé.")
+        print("Telegram recap sent.")
     except Exception as e:
-        print(f"Échec envoi Telegram : {e}")
+        print(f"Telegram send failed: {e}")
 
 
 def main(days: int = 30, notify: bool = False):
@@ -139,9 +140,9 @@ def main(days: int = 30, notify: bool = False):
             print(f"{date_str}: HC={kwh_hc:.3f} HP={kwh_hp:.3f} total={total:.3f} kWh → {cost:.2f}€")
             results.append((date_str, kwh_hc, kwh_hp, total, cost))
         except Exception as e:
-            print(f"{date_str}: ERREUR — {e}")
+            print(f"{date_str}: ERROR — {e}")
 
-    print(f"\nSync terminé : {len(results)} jours mis à jour.")
+    print(f"\nSync done: {len(results)} days updated.")
 
     if notify and results:
         send_telegram(build_recap(results))
@@ -150,8 +151,8 @@ def main(days: int = 30, notify: bool = False):
 if __name__ == "__main__":
     import argparse
     p = argparse.ArgumentParser()
-    p.add_argument("--days", type=int, default=30, help="Nb jours à syncer (défaut: 30)")
+    p.add_argument("--days", type=int, default=30, help="Number of days to sync (default: 30)")
     p.add_argument("--notify", action="store_true",
-                   help="Poste un récap sur Telegram en fin de sync")
+                   help="Post a recap to Telegram after the sync")
     args = p.parse_args()
     main(args.days, args.notify)

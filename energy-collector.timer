@@ -1,5 +1,5 @@
 [Unit]
-Description=Energy Collector — toutes les 15 min
+Description=Energy Collector — every 15 min
 
 [Timer]
 OnBootSec=1min

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Importe l'historique du Shelly EM (données 1 minute) dans SQLite.
-Format CSV: ts, e_a_wh, e_ret_a, e_ret_b, e_b_wh, power_a, power_b,
+Import the Shelly EM history (1-minute data) into SQLite.
+CSV format: ts, e_a_wh, e_ret_a, e_ret_b, e_b_wh, power_a, power_b,
             aprt_a, aprt_b, volt_a, volt_b, volt_avg, curr_a, curr_b, curr_avg
 """
 import requests
@@ -35,15 +35,15 @@ def parse_row(line):
 
 def main():
     init_db()
-    print("Téléchargement historique Shelly EM...")
+    print("Downloading Shelly EM history...")
     lines = fetch_csv()
-    print(f"{len(lines)} enregistrements trouvés")
+    print(f"{len(lines)} records found")
 
     inserted = 0
     skipped = 0
 
     with get_conn() as conn:
-        # Récupérer les ts déjà en base pour éviter les doublons
+        # Fetch timestamps already in the DB to avoid duplicates
         existing = set(r[0] for r in conn.execute("SELECT ts FROM readings").fetchall())
 
         rows_to_insert = []
@@ -66,16 +66,16 @@ def main():
         )
         inserted = len(rows_to_insert)
 
-    print(f"Importé : {inserted} | Déjà présents : {skipped}")
+    print(f"Imported: {inserted} | Already present: {skipped}")
 
-    # Recalculer les coûts journaliers pour chaque jour présent
-    print("Recalcul des coûts journaliers...")
+    # Recompute daily costs for every day present
+    print("Recomputing daily costs...")
     with get_conn() as conn:
         dates = conn.execute(
             "SELECT DISTINCT date(ts, 'unixepoch', 'localtime') as d FROM readings ORDER BY d"
         ).fetchall()
 
-    interval_h = 1 / 60  # 1 minute en heures
+    interval_h = 1 / 60  # 1 minute in hours
     for (date_str,) in dates:
         midnight = datetime.strptime(date_str, "%Y-%m-%d")
         midnight_ts = int(TZ.localize(midnight).timestamp())
@@ -92,7 +92,7 @@ def main():
         upsert_daily_cost(date_str, kwh_hc, kwh_hp)
         print(f"  {date_str}: HC={kwh_hc:.3f}kWh HP={kwh_hp:.3f}kWh")
 
-    print("Backfill terminé.")
+    print("Backfill done.")
 
 if __name__ == "__main__":
     main()

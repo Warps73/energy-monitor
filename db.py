@@ -34,7 +34,7 @@ def init_db():
 
 
 def is_hc(ts_seconds: int) -> bool:
-    """Return True if timestamp falls in heures creuses."""
+    """Return True if the timestamp falls within off-peak (heures creuses) hours."""
     from datetime import datetime, timezone
     import pytz
     tz = pytz.timezone("Europe/Paris")

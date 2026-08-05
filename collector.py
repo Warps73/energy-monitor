@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Collecteur Shelly EM — à lancer toutes les 15 minutes via systemd timer.
+Shelly EM collector — run every 15 minutes via systemd timer.
 """
 import time
 import requests
@@ -30,7 +30,7 @@ def fetch_shelly():
 
 
 def fetch_energy_total():
-    """Retourne le total kWh du compteur (canal A)."""
+    """Return the meter's total energy (channel A), in Wh."""
     url = f"http://{SHELLY_IP}/rpc/EM1Data.GetStatus?id=0"
     r = requests.get(url, timeout=5)
     r.raise_for_status()
@@ -39,7 +39,7 @@ def fetch_energy_total():
 
 
 def recompute_today():
-    """Recalcule les kWh HP/HC du jour courant à partir des lectures."""
+    """Recompute today's HP/HC kWh from the stored readings."""
     now = datetime.now(TZ)
     date_str = now.strftime("%Y-%m-%d")
     midnight = TZ.localize(datetime(now.year, now.month, now.day)).timestamp()
@@ -63,7 +63,7 @@ def recompute_today():
         else:
             kwh_hp += p
     upsert_daily_cost(date_str, kwh_hc, kwh_hp)
-    log.info(f"Coût recalculé pour {date_str}: HC={kwh_hc:.3f}kWh HP={kwh_hp:.3f}kWh")
+    log.info(f"Cost recomputed for {date_str}: HC={kwh_hc:.3f}kWh HP={kwh_hp:.3f}kWh")
 
 
 def main():
@@ -73,7 +73,7 @@ def main():
     try:
         reading = fetch_shelly()
     except Exception as e:
-        log.error(f"Erreur lecture Shelly: {e}")
+        log.error(f"Shelly read error: {e}")
         return
 
     try:
